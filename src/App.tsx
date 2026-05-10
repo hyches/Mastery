@@ -1751,8 +1751,8 @@ export default function App() {
           {activeTab === 'calendar' && (
             <CalendarView 
               activeCourse={activeCourse} 
+              updateActiveCourse={updateActiveCourse} 
               setActiveTab={setActiveTab} 
-              setSelectedTopicId={setSelectedTopicId} 
             />
           )}
 
