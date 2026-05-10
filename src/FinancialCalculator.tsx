@@ -345,7 +345,7 @@ export const FinancialCalculator: React.FC<{
       exit={{ opacity: 0, scale: 0.95, y: 20 }}
       className={cn(
         "bg-[#0A0A0B] z-[1001] flex flex-col border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-hidden rounded-xl cursor-default",
-        isPopout ? "w-full h-full" : "fixed right-8 top-24 w-[320px]"
+        isPopout ? "w-full h-full" : "fixed right-4 md:right-8 top-20 md:top-24 left-4 md:left-auto w-auto md:w-[320px] max-h-[85vh] md:max-h-none"
       )}
     >
       {/* Header - Drag Handle */}

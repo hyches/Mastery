@@ -64,6 +64,32 @@ export interface Assessment {
   notes?: string;
 }
 
+export interface MistakeEntry {
+  id: string;
+  date: string;
+  topicId: string;
+  subtopicId?: string;
+  questionType: 'Calculation' | 'Conceptual' | 'Ethics';
+  timeTakenSeconds: number;
+  whyWrong: string;
+  correctReasoning: string;
+  formulaMissed?: string;
+  revisitDate: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  date: string;
+  answers: string[];
+}
+
+export interface ToolBuild {
+  id: string;
+  name: string;
+  status: 'Not Started' | 'In Progress' | 'Complete';
+  path?: string;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -74,6 +100,12 @@ export interface Course {
   scheduledRevisions: ScheduledRevision[];
   examDate: string;
   vaultName: string;
+  mistakes?: MistakeEntry[];
+  ethicsMiniMocks?: string[]; // ISO Dates
+  dailyEthicsDrips?: string[]; // ISO Dates
+  recoveryDays?: string[]; // ISO Dates
+  auditLogs?: AuditEntry[];
+  tools?: ToolBuild[];
 }
 
 export interface AppState {

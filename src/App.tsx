@@ -22,7 +22,12 @@ import {
   Search,
   BarChart3,
   Square,
-  Calculator
+  Calculator,
+  FileText,
+  AlertCircle,
+  Wrench,
+  ClipboardList,
+  BarChart4
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -35,7 +40,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { format, differenceInDays, parseISO, startOfDay, subDays, subMinutes, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
+import { format, differenceInDays, parseISO, startOfDay, subDays, addDays, subMinutes, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -43,11 +48,16 @@ import { twMerge } from 'tailwind-merge';
 import { CFATopic, AppState, StudySession, TopicStatus, Course, ScheduledRevision, SubTopic } from './types';
 import { CFA_TOPICS, CA_INTER_TOPICS } from './constants';
 import { FinancialCalculator } from './FinancialCalculator';
+import { NotebookView } from './NotebookView';
+import { MistakeJournal } from './MistakeJournal';
+import { ToolsChecklist } from './ToolsChecklist';
+import { MonthlyAudit } from './MonthlyAudit';
+import { WeeklyPlan } from './WeeklyPlan';
 import { cn } from './lib/utils';
 
 const COLORS = ['#C5A059', '#8e8e8e', '#4a4a4a', '#2a2a2a'];
 
-const CalendarView = ({ activeCourse, setActiveTab, setSelectedTopicId }: { activeCourse: Course, setActiveTab: any, setSelectedTopicId: any }) => {
+const CalendarView = ({ activeCourse, updateActiveCourse, setActiveTab }: { activeCourse: Course, updateActiveCourse: (u: Partial<Course>) => void, setActiveTab: any }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const days = eachDayOfInterval({
@@ -59,15 +69,32 @@ const CalendarView = ({ activeCourse, setActiveTab, setSelectedTopicId }: { acti
     const dateStr = format(day, 'yyyy-MM-dd');
     const assessments = activeCourse.assessments.filter(a => a.date === dateStr);
     const sessions = activeCourse.sessions.filter(s => s.date === dateStr);
-    return [...assessments.map(a => ({ ...a, eventType: 'assessment' })), ...sessions.map(s => ({ ...s, eventType: 'session' }))];
+    const isRecovery = (activeCourse.recoveryDays || []).includes(dateStr);
+    return {
+      events: [...assessments.map(a => ({ ...a, eventType: 'assessment' })), ...sessions.map(s => ({ ...s, eventType: 'session' }))],
+      isRecovery
+    };
+  };
+
+  const toggleRecovery = (day: Date) => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const existing = activeCourse.recoveryDays || [];
+    if (existing.includes(dateStr)) {
+      updateActiveCourse({ recoveryDays: existing.filter(d => d !== dateStr) });
+    } else {
+      updateActiveCourse({ recoveryDays: [...existing, dateStr] });
+    }
   };
 
   return (
     <div className="p-8 md:p-16 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div>
-          <h2 className="text-6xl font-serif font-black tracking-tighter">Study Calendar</h2>
-          <p className="text-white/40 mt-4 font-light italic font-serif">Commitments & Milestones</p>
+          <h2 className="text-4xl md:text-6xl font-serif font-black tracking-tighter">Study Calendar</h2>
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mt-2 md:mt-4">
+            <p className="text-white/40 font-light italic font-serif">Commitments & Milestones</p>
+            <span className="text-[10px] uppercase tracking-widest text-blue-400 opacity-60">Tip: Click date number to toggle Recovery Day</span>
+          </div>
         </div>
         <div className="flex items-center gap-4 glass p-2 px-4">
           <button 
@@ -90,23 +117,40 @@ const CalendarView = ({ activeCourse, setActiveTab, setSelectedTopicId }: { acti
         </div>
         <div className="grid grid-cols-7">
           {days.map((day, idx) => {
-            const events = getEventsForDay(day);
+            const { events, isRecovery } = getEventsForDay(day);
             const isCurrentMonth = isSameMonth(day, currentMonth);
             
             return (
               <div 
                 key={idx} 
                 className={cn(
-                  "min-h-[140px] p-3 border-r border-b border-white/5 transition-colors hover:bg-white/[0.02] flex flex-col",
-                  !isCurrentMonth && "opacity-10 pointer-events-none"
+                  "min-h-[80px] md:min-h-[140px] p-2 md:p-3 border-r border-b border-white/5 transition-colors hover:bg-white/[0.02] flex flex-col group",
+                  !isCurrentMonth && "opacity-10 pointer-events-none",
+                  isRecovery && "bg-blue-500/[0.03]"
                 )}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <span className={cn(
-                    "text-xs font-mono",
-                    isToday(day) && "text-prestige-gold font-bold scale-125"
-                  )}>{format(day, 'd')}</span>
-                  {isToday(day) && <div className="w-1 h-1 rounded-full bg-prestige-gold shadow-[0_0_8px_rgba(197,160,89,1)]" />}
+                <div className="flex justify-between items-start mb-1 md:mb-3">
+                  <button 
+                    onClick={() => toggleRecovery(day)}
+                    className={cn(
+                      "text-xs font-mono p-1 rounded hover:bg-white/10 transition-all",
+                      isToday(day) && "text-prestige-gold font-bold scale-125",
+                      isRecovery && "text-blue-400 font-bold"
+                    )}
+                  >
+                    {format(day, 'd')}
+                  </button>
+                  <div className="flex gap-1 items-center">
+                    {isRecovery && (
+                      <motion.div 
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                        className="text-[8px] uppercase tracking-widest text-blue-400 font-bold bg-blue-400/10 px-1.5 py-0.5 rounded"
+                      >
+                        Recovery
+                      </motion.div>
+                    )}
+                    {isToday(day) && <div className="w-1.5 h-1.5 rounded-full bg-prestige-gold shadow-[0_0_8px_rgba(197,160,89,1)]" />}
+                  </div>
                 </div>
                 <div className="space-y-1.5 flex-1 overflow-y-auto custom-scrollbar pr-1">
                   {events.map((event: any, eIdx) => (
@@ -157,6 +201,10 @@ const CalendarView = ({ activeCourse, setActiveTab, setSelectedTopicId }: { acti
           <span className="text-[10px] uppercase tracking-widest">Revisions</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-blue-400" />
+          <span className="text-[10px] uppercase tracking-widest">Recovery Day</span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-blue-500" />
           <span className="text-[10px] uppercase tracking-widest">Sessions</span>
         </div>
@@ -180,61 +228,26 @@ export default function App() {
     const saved = localStorage.getItem('prestige_tracker_state');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migration: Move scheduledRevisions to assessments if they exist
+      // Migration: Ensure all course fields exist
       const migratedCourses = parsed.courses.map((course: Course) => {
-        if (course.scheduledRevisions && course.scheduledRevisions.length > 0) {
-          const newAssessmentsFromRevisions = course.scheduledRevisions.map((rev: any) => ({
-            id: rev.id,
-            type: 'Revision',
-            topicId: rev.topicId,
-            name: 'Migrated Revision',
-            date: rev.date,
-            time: rev.time,
-            status: rev.status === 'Completed' ? 'Completed' : 'Scheduled',
-            strengthTopics: [],
-            weaknessTopics: []
-          }));
-          return {
-            ...course,
-            assessments: [...(course.assessments || []), ...newAssessmentsFromRevisions],
-            scheduledRevisions: [] // Clear them out
-          };
-        }
-        return course;
+        return {
+          ...course,
+          mistakes: course.mistakes || [],
+          ethicsMiniMocks: course.ethicsMiniMocks || [],
+          dailyEthicsDrips: course.dailyEthicsDrips || [],
+          recoveryDays: course.recoveryDays || [],
+          auditLogs: course.auditLogs || [],
+          tools: course.tools || [
+            { id: 'tvm', name: 'TVM Calculator', status: 'Not Started' },
+            { id: 'stats', name: 'Stats Calculator', status: 'Not Started' },
+            { id: 'dcf', name: 'DCF Model', status: 'Not Started' },
+            { id: 'yield', name: 'Bond Yield + Duration', status: 'Not Started' },
+            { id: 'port', name: 'Portfolio Metrics', status: 'Not Started' }
+          ],
+          assessments: course.assessments || []
+        };
       });
       return { ...parsed, courses: migratedCourses };
-    }
-    
-    // Check for old state to migrate
-    const oldSaved = localStorage.getItem('cfa_tracker_state');
-    if (oldSaved) {
-      const oldData = JSON.parse(oldSaved);
-      const migratedCourse: Course = {
-        id: 'cfa-level-1',
-        name: 'CFA Level I',
-        description: 'Migrated from previous version',
-        topics: oldData.topics || CFA_TOPICS,
-        sessions: oldData.sessions || [],
-        assessments: [],
-        scheduledRevisions: [],
-        examDate: oldData.examDate || format(new Date(new Date().getFullYear(), 11, 15), 'yyyy-MM-dd'),
-        vaultName: oldData.vaultName || 'CFA-Notes'
-      };
-      
-      return {
-        courses: [migratedCourse, {
-          id: 'ca-inter',
-          name: 'CA Inter',
-          description: 'Chartered Accountancy Intermediate Exam',
-          topics: CA_INTER_TOPICS,
-          sessions: [],
-          assessments: [],
-          scheduledRevisions: [],
-          examDate: format(new Date(new Date().getFullYear(), 4, 1), 'yyyy-MM-dd'),
-          vaultName: 'CA-Notes'
-        }],
-        activeCourseId: 'cfa-level-1',
-      };
     }
     
     // Initial default courses
@@ -248,7 +261,19 @@ export default function App() {
         assessments: [],
         scheduledRevisions: [],
         examDate: format(new Date(new Date().getFullYear(), 11, 15), 'yyyy-MM-dd'),
-        vaultName: 'CFA-Notes'
+        vaultName: 'CFA-Notes',
+        mistakes: [],
+        ethicsMiniMocks: [],
+        dailyEthicsDrips: [],
+        recoveryDays: [],
+        auditLogs: [],
+        tools: [
+          { id: 'tvm', name: 'TVM Calculator', status: 'Not Started' },
+          { id: 'stats', name: 'Stats Calculator', status: 'Not Started' },
+          { id: 'dcf', name: 'DCF Model', status: 'Not Started' },
+          { id: 'yield', name: 'Bond Yield + Duration', status: 'Not Started' },
+          { id: 'port', name: 'Portfolio Metrics', status: 'Not Started' }
+        ]
       },
       {
         id: 'ca-inter',
@@ -259,7 +284,19 @@ export default function App() {
         assessments: [],
         scheduledRevisions: [],
         examDate: format(new Date(new Date().getFullYear(), 4, 1), 'yyyy-MM-dd'),
-        vaultName: 'CA-Notes'
+        vaultName: 'CA-Notes',
+        mistakes: [],
+        ethicsMiniMocks: [],
+        dailyEthicsDrips: [],
+        recoveryDays: [],
+        auditLogs: [],
+        tools: [
+          { id: 'tvm', name: 'TVM Calculator', status: 'Not Started' },
+          { id: 'stats', name: 'Stats Calculator', status: 'Not Started' },
+          { id: 'dcf', name: 'DCF Model', status: 'Not Started' },
+          { id: 'yield', name: 'Bond Yield + Duration', status: 'Not Started' },
+          { id: 'port', name: 'Portfolio Metrics', status: 'Not Started' }
+        ]
       }
     ];
 
@@ -269,7 +306,7 @@ export default function App() {
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'topics' | 'sessions' | 'assessments' | 'settings' | 'calendar'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'topics' | 'sessions' | 'assessments' | 'settings' | 'calendar' | 'notebook' | 'mistakes' | 'tools' | 'plan' | 'audit'>('dashboard');
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -423,7 +460,21 @@ export default function App() {
       }
     }
 
-    return { completed, progress, daysLeft, totalHours, readinessScore, streak };
+    const ethicsMiniMocksCompleted = (activeCourse.ethicsMiniMocks || []).length;
+    const morningStudyIdx = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const dailyEthicsDripsThisWeek = (activeCourse.dailyEthicsDrips || []).filter(date => {
+      const d = parseISO(date);
+      return d >= morningStudyIdx && d <= addDays(morningStudyIdx, 6);
+    }).length;
+    const mistakeJournalEntriesCount = (activeCourse.mistakes || []).length;
+    const recoveryDaysUsed = (activeCourse.recoveryDays || []).length;
+    const toolCompletionPercentage = activeCourse.tools ? Math.round((activeCourse.tools.filter(t => t.status === 'Complete').length / activeCourse.tools.length) * 100) : 0;
+
+    return { 
+      completed, progress, daysLeft, totalHours, readinessScore, streak,
+      ethicsMiniMocksCompleted, dailyEthicsDripsThisWeek, 
+      mistakeJournalEntriesCount, recoveryDaysUsed, toolCompletionPercentage 
+    };
   }, [activeCourse]);
 
   // SRS & Confidence Decay Logic
@@ -657,7 +708,7 @@ export default function App() {
             >
               <span className="rotate-[-45deg] font-serif font-black text-2xl text-prestige-gold">M</span>
             </motion.div>
-            <h1 className="text-6xl font-serif font-black tracking-tighter uppercase">Mastery Progress</h1>
+            <h1 className="text-4xl md:text-6xl font-serif font-black tracking-tighter uppercase">Mastery Progress</h1>
             <p className="text-white/40 font-light text-lg">Select your path to professional excellence.</p>
           </div>
 
@@ -712,17 +763,17 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/80 backdrop-blur-md"
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/80 backdrop-blur-md"
               onClick={() => setShowAddCourseModal(false)}
             >
               <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="glass-dark w-full max-w-md p-10 space-y-8"
+                className="glass-dark w-full max-w-md p-6 md:p-10 space-y-6 md:space-y-8"
                 onClick={e => e.stopPropagation()}
               >
-                <h3 className="text-3xl font-serif font-bold">New Course</h3>
+                <h3 className="text-2xl md:text-3xl font-serif font-bold">New Course</h3>
                 <div className="space-y-4">
                   <label className="text-[10px] uppercase tracking-widest opacity-30">Course Name</label>
                   <input 
@@ -760,8 +811,8 @@ export default function App() {
   // If we have an active course, render the main tracker
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-[#F5F2ED] font-sans atmosphere overflow-hidden">
-      {/* Sidebar - Prestige Style */}
-      <aside className="fixed left-0 top-0 h-full w-20 md:w-24 flex flex-col items-center py-12 border-r border-white/5 glass-dark z-50">
+      {/* Sidebar - Desktop Only */}
+      <aside className="hidden md:flex fixed left-0 top-0 h-full w-24 flex-col items-center py-12 border-r border-white/5 glass-dark z-50">
         <button 
           onClick={() => setState(prev => ({ ...prev, activeCourseId: null }))}
           className="mb-16 group relative"
@@ -776,13 +827,18 @@ export default function App() {
           </span>
         </button>
 
-        <nav className="flex-1 flex flex-col gap-8">
+        <nav className="flex-1 flex flex-col gap-6 py-4 overflow-y-auto no-scrollbar">
           {[
             { id: 'dashboard', icon: LayoutDashboard },
+            { id: 'plan', icon: ClipboardList },
             { id: 'topics', icon: BookOpen },
             { id: 'calendar', icon: Calendar },
             { id: 'sessions', icon: Clock },
+            { id: 'mistakes', icon: AlertCircle },
+            { id: 'tools', icon: Wrench },
             { id: 'assessments', icon: Award },
+            { id: 'notebook', icon: FileText },
+            { id: 'audit', icon: BarChart4 },
             { id: 'settings', icon: Settings }
           ].map((tab) => (
             <button 
@@ -811,17 +867,49 @@ export default function App() {
         </div>
       </aside>
 
+      {/* Mobile Nav - Bottom Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[#0A0A0B]/80 backdrop-blur-xl border-t border-white/5 md:hidden flex items-center justify-around px-4 z-50">
+        {[
+          { id: 'dashboard', icon: LayoutDashboard },
+          { id: 'plan', icon: ClipboardList },
+          { id: 'topics', icon: BookOpen },
+          { id: 'calendar', icon: Calendar },
+          { id: 'mistakes', icon: AlertCircle },
+          { id: 'sessions', icon: Clock },
+          { id: 'settings', icon: Settings }
+        ].map((tab) => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={cn(
+              "p-2 transition-all duration-300",
+              activeTab === tab.id ? "text-prestige-gold" : "text-white/30"
+            )}
+          >
+            <tab.icon size={20} strokeWidth={2} />
+          </button>
+        ))}
+        <button 
+          onClick={() => setState(prev => ({ ...prev, activeCourseId: null }))}
+          className="p-2 text-white/30"
+        >
+          <div className="w-5 h-5 border border-prestige-gold/40 flex items-center justify-center rotate-45">
+            <span className="rotate-[-45deg] text-[8px] font-serif font-black text-prestige-gold">M</span>
+          </div>
+        </button>
+      </nav>
+
       {/* Main Content Area */}
-      <main className="ml-20 md:ml-24 h-screen overflow-y-auto relative">
+      <main className="ml-0 md:ml-24 h-screen overflow-y-auto relative pb-20 md:pb-0">
         {/* Top Right Calculator Trigger */}
         <button 
           onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}
           className={cn(
-            "fixed top-8 right-8 z-[100] p-4 glass-dark border border-white/10 rounded-full transition-all duration-500 group hover:border-prestige-gold/50",
+            "fixed top-6 right-6 md:top-8 md:right-8 z-[100] p-3 md:p-4 glass-dark border border-white/10 rounded-full transition-all duration-500 group hover:border-prestige-gold/50",
             isCalculatorOpen ? "text-prestige-gold shadow-[0_0_20px_rgba(197,160,89,0.2)]" : "text-white/40 hover:text-white"
           )}
         >
-          <Calculator size={24} strokeWidth={1.5} />
+          <Calculator size={20} className="md:w-6 md:h-6" strokeWidth={1.5} />
           <span className="absolute right-full mr-4 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[0.2em] opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap bg-black/90 p-2 px-4 border border-white/10 pointer-events-none">
             Financial Calculator
           </span>
@@ -847,21 +935,21 @@ export default function App() {
                     className="flex items-center gap-3 text-prestige-gold"
                   >
                     <Target size={16} />
-                    <span className="text-[10px] uppercase tracking-[0.4em] font-medium">Mastery Progress • {stats.progress}% Complete</span>
+                    <span className="text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium">Mastery Progress • {stats.progress}% Complete</span>
                   </motion.div>
-                  <h1 className="text-6xl md:text-8xl font-serif font-black leading-[0.9] tracking-tighter uppercase">
+                  <h1 className="text-4xl md:text-8xl font-serif font-black leading-[0.9] tracking-tighter uppercase">
                     {activeCourse.name}
                   </h1>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between md:justify-end gap-4">
                   <div className="text-right">
                     <p className="text-[10px] uppercase tracking-widest opacity-30">Exam Date</p>
-                    <p className="text-xl font-mono">{format(parseISO(activeCourse.examDate), 'MMM dd, yyyy')}</p>
+                    <p className="text-lg md:text-xl font-mono">{format(parseISO(activeCourse.examDate), 'MMM dd, yyyy')}</p>
                   </div>
                   <div className="h-12 w-px bg-white/10" />
                   <div className="text-right">
                     <p className="text-[10px] uppercase tracking-widest opacity-30">Days Remaining</p>
-                    <p className="text-xl font-mono text-prestige-gold">{stats.daysLeft}</p>
+                    <p className="text-lg md:text-xl font-mono text-prestige-gold">{stats.daysLeft}</p>
                   </div>
                 </div>
               </header>
@@ -878,8 +966,8 @@ export default function App() {
                     <p className="text-xs text-prestige-gold/60 italic font-serif">Weighted Mastery</p>
                   </div>
                   <div className="relative">
-                    <span className="text-8xl font-mono font-black">{stats.readinessScore}</span>
-                    <span className="text-xl opacity-20 ml-2">%</span>
+                    <span className="text-6xl md:text-8xl font-mono font-black">{stats.readinessScore}</span>
+                    <span className="text-lg md:text-xl opacity-20 ml-2">%</span>
                   </div>
                   <div className="space-y-2">
                     <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
@@ -955,7 +1043,7 @@ export default function App() {
                       <Flame size={16} className="text-orange-500 group-hover:scale-125 transition-transform" />
                     </div>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-5xl font-mono font-bold">{stats.streak}</span>
+                      <span className="text-4xl md:text-5xl font-mono font-bold">{stats.streak}</span>
                       <span className="text-xs opacity-30 uppercase tracking-widest">Days</span>
                     </div>
                   </div>
@@ -965,7 +1053,7 @@ export default function App() {
                       <Clock size={16} className="text-prestige-gold group-hover:rotate-12 transition-transform" />
                     </div>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-5xl font-mono font-bold">{stats.totalHours}</span>
+                      <span className="text-4xl md:text-5xl font-mono font-bold">{stats.totalHours}</span>
                       <span className="text-xs opacity-30 uppercase tracking-widest">Hours</span>
                     </div>
                   </div>
@@ -1013,72 +1101,89 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Upcoming Revisions */}
-                <div className="md:col-span-3 md:row-span-1 glass p-8 flex flex-col space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-[10px] uppercase tracking-[0.3em] opacity-40 mb-1">Upcoming Revisions</h3>
-                      <p className="text-xs text-prestige-gold/60 italic font-serif">Spaced Repetition</p>
+                {/* Strategic Tracking Bento */}
+                <div className="md:col-span-3 md:row-span-1 grid md:grid-cols-3 gap-4">
+                  {/* Ethics Tracker */}
+                  <div className="glass p-6 flex flex-col justify-between group overflow-hidden relative">
+                    <Zap size={80} className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-10 transition-all text-prestige-gold" />
+                    <div className="flex justify-between items-start">
+                      <h3 className="text-[10px] uppercase tracking-[0.3em] font-bold text-prestige-gold">Ethics Mastery</h3>
+                      <button 
+                        onClick={() => updateActiveCourse({ ethicsMiniMocks: [...(activeCourse.ethicsMiniMocks || []), new Date().toISOString()] })}
+                        className="p-1 px-2 border border-prestige-gold/20 rounded text-[8px] uppercase tracking-widest hover:bg-prestige-gold hover:text-black transition-all"
+                      >
+                        + Log Mini-Mock
+                      </button>
                     </div>
-                    <div 
-                      onClick={() => setActiveTab('calendar')}
-                      className="flex items-center gap-2 text-[10px] uppercase tracking-widest opacity-40 hover:opacity-100 cursor-pointer transition-opacity"
-                    >
-                      <Calendar size={12} /> Schedule
+                    <div className="space-y-4">
+                      <div className="flex items-baseline gap-4">
+                        <div className="flex flex-col">
+                          <span className="text-3xl font-mono font-bold">{stats.ethicsMiniMocksCompleted}</span>
+                          <span className="text-[8px] uppercase tracking-widest opacity-40">Mocks</span>
+                        </div>
+                        <div className="h-8 w-px bg-white/10" />
+                        <div className="flex flex-col">
+                          <span className="text-3xl font-mono font-bold text-prestige-gold">{stats.dailyEthicsDripsThisWeek}/7</span>
+                          <span className="text-[8px] uppercase tracking-widest opacity-40">Drip Streak</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        {Array.from({ length: 7 }).map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={cn(
+                              "h-1.5 flex-1 rounded-full",
+                              i < stats.dailyEthicsDripsThisWeek ? "bg-prestige-gold" : "bg-white/5"
+                            )} 
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
-                    {activeCourse.assessments
-                      .filter(a => a.type === 'Revision' && a.status === 'Scheduled')
-                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                      .slice(0, 4)
-                      .map(rev => {
-                        const topic = activeCourse.topics.find(t => t.id === rev.topicId);
-                        const isToday = rev.date === format(new Date(), 'yyyy-MM-dd');
-                        
-                        return (
-                          <motion.div 
-                            key={rev.id}
-                            whileHover={{ y: -5 }}
-                            className={cn(
-                              "p-5 border transition-all flex flex-col justify-between",
-                              isToday ? "border-prestige-gold bg-prestige-gold/5" : "border-white/5 bg-white/[0.02]"
-                            )}
-                          >
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-start">
-                                <span className={cn(
-                                  "text-[8px] uppercase tracking-widest px-2 py-0.5 rounded-full",
-                                  isToday ? "bg-prestige-gold text-black font-bold" : "bg-white/10 text-white/40"
-                                )}>
-                                  {isToday ? 'Today' : format(parseISO(rev.date), 'MMM dd')}
-                                </span>
-                                <span className="text-[10px] font-mono opacity-40">{rev.time || '--:--'}</span>
-                              </div>
-                              <h4 className="font-serif text-base leading-tight line-clamp-2">{rev.name || topic?.name || 'Revision Session'}</h4>
-                              {rev.subTopicId && (
-                                <p className="text-[10px] uppercase tracking-widest text-prestige-gold/40 mt-1">
-                                  {topic?.subTopics?.find(st => st.id === rev.subTopicId)?.name}
-                                </p>
-                              )}
-                            </div>
-                            <button 
-                              onClick={() => {
-                                setActiveTab('assessments');
-                                setEditingAssessmentId(rev.id);
-                              }}
-                              className="text-[8px] uppercase tracking-widest text-prestige-gold hover:underline mt-4 text-left"
-                            >
-                              Log Results
-                            </button>
-                          </motion.div>
-                        );
-                      })}
-                    {activeCourse.assessments.filter(a => a.type === 'Revision' && a.status === 'Scheduled').length === 0 && (
-                      <div className="col-span-full flex items-center justify-center border border-dashed border-white/10 opacity-30 italic text-sm">
-                        No revisions scheduled.
+
+                  {/* Mistake Journal Stats */}
+                  <div className="glass p-6 flex flex-col justify-between group cursor-pointer" onClick={() => setActiveTab('mistakes')}>
+                    <div className="flex justify-between items-start">
+                      <h3 className="text-[10px] uppercase tracking-[0.3em] opacity-40">Mistake Journal</h3>
+                      <AlertCircle size={16} className="text-red-500 opacity-40" />
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl md:text-5xl font-mono font-bold">{stats.mistakeJournalEntriesCount}</span>
+                      <span className="text-xs opacity-30 uppercase tracking-widest">Leads</span>
+                    </div>
+                    <p className="text-[10px] uppercase tracking-widest text-red-500/60 font-bold">Fix these before mocks</p>
+                  </div>
+
+                  {/* Build & Recovery */}
+                  <div className="glass p-6 space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center group cursor-pointer" onClick={() => setActiveTab('tools')}>
+                        <h3 className="text-[10px] uppercase tracking-[0.3em] opacity-40">Tool Builds</h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-prestige-gold font-bold">{stats.toolCompletionPercentage}%</span>
+                          <Wrench size={14} className="text-prestige-gold opacity-40 group-hover:rotate-45 transition-transform" />
+                        </div>
                       </div>
-                    )}
+                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${stats.toolCompletionPercentage}%` }}
+                          className="h-full bg-prestige-gold"
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-4 border-t border-white/5 flex justify-between items-center">
+                      <div className="space-y-1">
+                        <h3 className="text-[10px] uppercase tracking-[0.3em] opacity-40">Recovery Days</h3>
+                        <p className="text-xl font-mono text-blue-400 font-bold">{stats.recoveryDaysUsed}</p>
+                      </div>
+                      <button 
+                        onClick={() => setActiveTab('calendar')}
+                        className="p-1 px-3 glass hover:bg-white/10 transition-all text-[8px] uppercase tracking-widest font-bold"
+                      >
+                        Log Rest
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1293,7 +1398,7 @@ export default function App() {
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden ml-[60px] space-y-1"
+                          className="overflow-hidden ml-4 md:ml-[60px] space-y-1"
                         >
                           {topic.subTopics?.map(st => (
                             <div key={st.id} className="glass-dark p-4 flex items-center justify-between group border-l border-prestige-gold/20">
@@ -1434,12 +1539,12 @@ export default function App() {
                     onClick={() => setEditingTopicId(null)}
                   >
                     <motion.div 
-                      className="glass-dark w-full max-w-4xl p-12 space-y-12 relative"
+                      className="glass-dark w-full max-w-4xl p-6 md:p-12 space-y-8 md:space-y-12 relative overflow-y-auto max-h-[90vh]"
                       onClick={e => e.stopPropagation()}
                     >
                       <button 
                         onClick={() => setEditingTopicId(null)}
-                        className="absolute top-8 right-8 text-white/30 hover:text-white"
+                        className="absolute top-4 right-4 md:top-8 md:right-8 text-white/30 hover:text-white"
                       >
                         <Settings size={20} />
                       </button>
@@ -1665,8 +1770,8 @@ export default function App() {
                 </div>
               </header>
 
-              <div className="glass overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="glass overflow-x-auto border border-white/5">
+                <table className="w-full text-left border-collapse min-w-[700px] md:min-w-0">
                   <thead>
                     <tr className="border-b border-white/10 text-[10px] uppercase tracking-widest opacity-40">
                       <th className="p-6 font-medium">Date</th>
@@ -1744,11 +1849,11 @@ export default function App() {
                     onClick={() => setEditingSessionId(null)}
                   >
                     <motion.div 
-                      className="glass-dark w-full max-w-2xl p-12 space-y-8"
+                      className="glass-dark w-full max-w-2xl p-6 md:p-12 space-y-6 md:space-y-8 relative overflow-y-auto max-h-[90vh]"
                       onClick={e => e.stopPropagation()}
                     >
-                      <h3 className="text-3xl font-serif font-bold">Session Details</h3>
-                      <div className="grid grid-cols-2 gap-8">
+                      <h3 className="text-xl md:text-3xl font-serif font-bold">Session Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
                         <div className="space-y-4">
                           <label className="text-[10px] uppercase tracking-widest opacity-30">Start Time</label>
                           <input 
@@ -2685,6 +2790,38 @@ export default function App() {
               </div>
             </motion.div>
           )}
+
+          {activeTab === 'notebook' && (
+            <NotebookView key="notebook" activeCourse={activeCourse} />
+          )}
+
+          {activeTab === 'mistakes' && (
+            <MistakeJournal 
+              activeCourse={activeCourse} 
+              updateActiveCourse={updateActiveCourse} 
+            />
+          )}
+
+          {activeTab === 'tools' && (
+            <ToolsChecklist 
+              activeCourse={activeCourse} 
+              updateActiveCourse={updateActiveCourse} 
+            />
+          )}
+
+          {activeTab === 'plan' && (
+            <WeeklyPlan 
+              activeCourse={activeCourse} 
+              updateActiveCourse={updateActiveCourse} 
+            />
+          )}
+
+          {activeTab === 'audit' && (
+            <MonthlyAudit 
+              activeCourse={activeCourse} 
+              updateActiveCourse={updateActiveCourse} 
+            />
+          )}
         </AnimatePresence>
       </main>
       {/* Zen Mode Overlay */}
@@ -2835,17 +2972,17 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-8 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-8 bg-black/80 backdrop-blur-md"
             onClick={() => setInputModal(prev => ({ ...prev, show: false }))}
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="glass-dark w-full max-w-md p-10 space-y-8"
+              className="glass-dark w-full max-w-md p-6 md:p-10 space-y-6 md:space-y-8"
               onClick={e => e.stopPropagation()}
             >
-              <h3 className="text-3xl font-serif font-bold">{inputModal.title}</h3>
+              <h3 className="text-2xl md:text-3xl font-serif font-bold">{inputModal.title}</h3>
               <div className="space-y-4">
                 <label className="text-[10px] uppercase tracking-widest opacity-30">{inputModal.label}</label>
                 <input 
